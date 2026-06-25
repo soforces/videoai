@@ -1,0 +1,14 @@
+{
+  "extraction_mode": "all_frames",
+  "processing_mode": "max_quality",
+  "enable_upscale": true,
+  "enable_face_restore": true,
+  "enable_blur_restore": true,
+  "enable_dedup": true,
+  "enable_background_removal": true,
+  "enable_segmentation": true,
+  "enable_ocr": true,
+  "enable_quality_scoring": true,
+  "export_format": "png",
+  "contact_sheet": true
+}

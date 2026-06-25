@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Video Frame Processing</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    min-height: 100vh;
+    margin: 0;
+    padding: 2.5rem 1rem;
+  }
+  .card {
+    background: #1e293b;
+    padding: 2rem 2.5rem;
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+    width: 100%;
+    max-width: 560px;
+  }
+  h1 { font-size: 1.3rem; margin: 0 0 1.5rem 0; text-align: center; }
+  h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: #818cf8; margin: 1.4rem 0 0.6rem; }
+  label { display: block; font-size: 0.85rem; margin-bottom: 0.3rem; color: #94a3b8; }
+  .row { display: flex; gap: 0.8rem; }
+  .row > div { flex: 1; }
+  input[type="file"], input[type="number"], select {
+    width: 100%;
+    padding: 0.55rem 0.65rem;
+    margin-bottom: 0.9rem;
+    border-radius: 8px;
+    border: 1px solid #334155;
+    background: #0f172a;
+    color: #e2e8f0;
+    font-size: 0.9rem;
+  }
+  .toggles { display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem 1rem; margin-bottom: 0.8rem; }
+  .toggle { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: #cbd5e1; }
+  .toggle input { width: auto; margin: 0; }
+  button, .btn {
+    width: 100%;
+    padding: 0.7rem;
+    border: none;
+    border-radius: 8px;
+    background: #6366f1;
+    color: white;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-secondary { background: #334155; font-weight: 500; }
+  button:hover:not(:disabled), .btn:hover { background: #4f46e5; }
+  button:disabled { background: #475569; cursor: not-allowed; }
+  #status { margin-top: 1rem; text-align: center; font-size: 0.88rem; color: #94a3b8; min-height: 1.2rem; }
+  #status.error { color: #f87171; }
+  #status.success { color: #4ade80; }
+  #progressWrap { margin-top: 1.1rem; display: none; }
+  #progressBarBg { width: 100%; height: 10px; border-radius: 6px; background: #0f172a; overflow: hidden; }
+  #progressBarFill { height: 100%; width: 0%; background: linear-gradient(90deg, #6366f1, #818cf8); transition: width 0.3s ease; }
+  #progressLabel { display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.82rem; color: #94a3b8; }
+  .preset-row { display: flex; gap: 0.6rem; margin-bottom: 0.9rem; }
+  .preset-row select { margin-bottom: 0; }
+  .hint { font-size: 0.75rem; color: #64748b; margin: -0.5rem 0 0.8rem; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>AI Video Frame Processing Pipeline</h1>
+
+    <h2>Preset</h2>
+    <div class="preset-row">
+      <select id="presetSelect"></select>
+      <button type="button" class="btn btn-secondary" id="saveBtn" style="width:auto;">Kaydet</button>
+    </div>
+
+    <form id="form">
+      <label for="video">Video (MP4 / MOV / MKV / AVI / WEBM)</label>
+      <input type="file" id="video" name="video" accept=".mp4,.mov,.mkv,.avi,.webm" required>
+
+      <h2>Frame Extraction</h2>
+      <div class="row">
+        <div>
+          <label for="extraction_mode">Mode</label>
+          <select id="extraction_mode" name="extraction_mode">
+            <option value="n_sample">N-frame sampling</option>
+            <option value="fps">FPS-based</option>
+            <option value="all_frames">All frames</option>
+            <option value="timestamp_range">Timestamp range</option>
+            <option value="scene_detect">Scene detection</option>
+          </select>
+        </div>
+        <div>
+          <label for="processing_mode">Processing mode</label>
+          <select id="processing_mode" name="processing_mode">
+            <option value="fast">Fast</option>
+            <option value="balanced">Balanced</option>
+            <option value="max_quality">Max quality</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row" id="extractionParams">
+        <div><label for="n_frames">Frame count</label><input type="number" id="n_frames" name="n_frames" min="1" value="20"></div>
+        <div><label for="fps">FPS</label><input type="number" id="fps" name="fps" min="0.1" step="0.1" value="2"></div>
+      </div>
+      <div class="row" id="rangeParams" style="display:none;">
+        <div><label for="start_seconds">Start (s)</label><input type="number" id="start_seconds" name="start_seconds" min="0" step="0.1" value="0"></div>
+        <div><label for="end_seconds">End (s)</label><input type="number" id="end_seconds" name="end_seconds" min="0" step="0.1" value="5"></div>
+      </div>
+
+      <h2>Pipeline stages</h2>
+      <div class="toggles">
+        <label class="toggle"><input type="checkbox" name="enable_dedup" checked> Duplicate filtering</label>
+        <label class="toggle"><input type="checkbox" name="enable_face_restore" checked> Face restoration</label>
+        <label class="toggle"><input type="checkbox" name="enable_upscale"> Upscale</label>
+        <label class="toggle"><input type="checkbox" name="enable_blur_restore" checked> Blur/restoration</label>
+        <label class="toggle"><input type="checkbox" name="enable_background_removal"> Background removal</label>
+        <label class="toggle"><input type="checkbox" name="enable_segmentation"> Segmentation (SAM2)</label>
+        <label class="toggle"><input type="checkbox" name="enable_ocr"> OCR</label>
+        <label class="toggle"><input type="checkbox" name="enable_quality_scoring" checked> Quality scoring</label>
+      </div>
+      <div class="hint">Quality scoring runs MUSIQ (neural quality score) and a CLIP-based artifact/anomaly check per kept frame; results are written to quality_report.json in the downloaded zip. OCR text and segmentation masks (when enabled) are included in the zip as ocr_text.json and *_mask.png.</div>
+
+      <h2>Export</h2>
+      <div class="row">
+        <div>
+          <label for="export_format">Format</label>
+          <select id="export_format" name="export_format">
+            <option value="jpg">JPG</option>
+            <option value="png">PNG</option>
+            <option value="webp">WebP</option>
+          </select>
+        </div>
+        <div style="display:flex; align-items:flex-end; padding-bottom:0.9rem;">
+          <label class="toggle"><input type="checkbox" name="contact_sheet"> Contact sheet</label>
+        </div>
+      </div>
+
+      <button type="submit" id="submitBtn">Process Video</button>
+    </form>
+    <div id="status"></div>
+    <div id="progressWrap">
+      <div id="progressBarBg"><div id="progressBarFill"></div></div>
+      <div id="progressLabel">
+        <span id="progressStage">Basliyor...</span>
+        <span id="progressPercent">0%</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById("form");
+    const statusEl = document.getElementById("status");
+    const submitBtn = document.getElementById("submitBtn");
+    const progressWrap = document.getElementById("progressWrap");
+    const progressFill = document.getElementById("progressBarFill");
+    const progressStage = document.getElementById("progressStage");
+    const progressPercent = document.getElementById("progressPercent");
+    const extractionMode = document.getElementById("extraction_mode");
+    const extractionParams = document.getElementById("extractionParams");
+    const rangeParams = document.getElementById("rangeParams");
+    const presetSelect = document.getElementById("presetSelect");
+    const saveBtn = document.getElementById("saveBtn");
+
+    function syncExtractionParams() {
+      const mode = extractionMode.value;
+      extractionParams.style.display = (mode === "n_sample" || mode === "fps") ? "flex" : "none";
+      rangeParams.style.display = mode === "timestamp_range" ? "flex" : "none";
+    }
+    extractionMode.addEventListener("change", syncExtractionParams);
+    syncExtractionParams();
+
+    function setProgress(pct, stageText) {
+      progressFill.style.width = pct + "%";
+      progressPercent.textContent = Math.round(pct) + "%";
+      if (stageText) progressStage.textContent = stageText;
+    }
+
+    function applyPresetToForm(preset) {
+      for (const [key, value] of Object.entries(preset)) {
+        const el = form.elements[key];
+        if (!el) continue;
+        if (el.type === "checkbox") el.checked = !!value;
+        else el.value = value;
+      }
+      syncExtractionParams();
+    }
+
+    async function loadPresetList() {
+      const res = await fetch("/presets");
+      const names = await res.json();
+      presetSelect.innerHTML = '<option value="">-- preset secin --</option>' + names.map(n => `<option value="${n}">${n}</option>`).join("");
+    }
+    presetSelect.addEventListener("change", async () => {
+      if (!presetSelect.value) return;
+      const res = await fetch(`/presets/${presetSelect.value}`);
+      applyPresetToForm(await res.json());
+    });
+    saveBtn.addEventListener("click", async () => {
+      const name = prompt("Preset adi:");
+      if (!name) return;
+      const data = Object.fromEntries(new FormData(form).entries());
+      data.enable_dedup = !!form.elements.enable_dedup.checked;
+      data.enable_face_restore = !!form.elements.enable_face_restore.checked;
+      data.enable_upscale = !!form.elements.enable_upscale.checked;
+      data.enable_blur_restore = !!form.elements.enable_blur_restore.checked;
+      data.enable_background_removal = !!form.elements.enable_background_removal.checked;
+      data.enable_segmentation = !!form.elements.enable_segmentation.checked;
+      data.enable_ocr = !!form.elements.enable_ocr.checked;
+      data.enable_quality_scoring = !!form.elements.enable_quality_scoring.checked;
+      data.contact_sheet = !!form.elements.contact_sheet.checked;
+      delete data.video;
+      await fetch(`/presets/${encodeURIComponent(name)}`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data),
+      });
+      await loadPresetList();
+      presetSelect.value = name;
+    });
+    loadPresetList();
+
+    function pollStatus(jobId) {
+      return new Promise((resolve, reject) => {
+        const interval = setInterval(async () => {
+          try {
+            const res = await fetch(`/status/${jobId}`);
+            if (!res.ok) throw new Error("Durum sorgulanamadi.");
+            const data = await res.json();
+            setProgress(data.percent || 0, data.stage);
+            if (data.status === "done") { clearInterval(interval); resolve(); }
+            else if (data.status === "error") { clearInterval(interval); reject(new Error(data.error || "Islem basarisiz oldu.")); }
+          } catch (err) { clearInterval(interval); reject(err); }
+        }, 800);
+      });
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      statusEl.className = "";
+      statusEl.textContent = "Isleniyor, lutfen bekleyin...";
+      submitBtn.disabled = true;
+      progressWrap.style.display = "block";
+      setProgress(0, "Yukleniyor...");
+
+      const formData = new FormData(form);
+      try {
+        const startRes = await fetch("/process", { method: "POST", body: formData });
+        if (!startRes.ok) { const text = await startRes.text(); throw new Error(text || "Bir hata olustu."); }
+        const { job_id } = await startRes.json();
+
+        await pollStatus(job_id);
+
+        const fileRes = await fetch(`/download/${job_id}`);
+        if (!fileRes.ok) throw new Error("Dosya indirilemedi.");
+        const blob = await fileRes.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "frames.zip";
+        const disposition = fileRes.headers.get("Content-Disposition");
+        if (disposition) { const match = disposition.match(/filename="?([^"]+)"?/); if (match) a.download = match[1]; }
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+
+        statusEl.className = "success";
+        statusEl.textContent = "Tamamlandi! Zip dosyasi indirildi.";
+      } catch (err) {
+        statusEl.className = "error";
+        statusEl.textContent = "Hata: " + err.message;
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

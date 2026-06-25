@@ -1,0 +1,15 @@
+{
+  "extraction_mode": "n_sample",
+  "n_frames": 20,
+  "processing_mode": "fast",
+  "enable_upscale": false,
+  "enable_face_restore": true,
+  "enable_blur_restore": true,
+  "enable_dedup": true,
+  "enable_background_removal": false,
+  "enable_segmentation": false,
+  "enable_ocr": false,
+  "enable_quality_scoring": true,
+  "export_format": "jpg",
+  "contact_sheet": false
+}
